@@ -47,4 +47,4 @@ jobs:
           app-name: 'pa4-26100396'
           publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE }}
           package: './webapp'
-          deployment-method: zip
+          
