@@ -10,6 +10,10 @@ jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
 
+    defaults:
+      run:
+        working-directory: webapp
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -18,14 +22,24 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20.x'
+          cache: 'npm'
+          cache-dependency-path: webapp/package-lock.json
 
       - name: Install dependencies
-        working-directory: webapp
-        run: npm install
+        run: npm ci
 
       - name: Build
-        working-directory: webapp
         run: npm run build --if-present
+
+      - name: Check secret exists
+        run: |
+          if [ -z "${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE }}" ]; then
+            echo "SECRET IS EMPTY - add it in GitHub Settings > Secrets"
+            exit 1
+          else
+            echo "Secret is present, proceeding with deployment"
+          fi
+        working-directory: ${{ github.workspace }}
 
       - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v3
@@ -33,3 +47,4 @@ jobs:
           app-name: 'pa4-26100396'
           publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE }}
           package: './webapp'
+          deployment-method: zip
