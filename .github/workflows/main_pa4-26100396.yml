@@ -28,7 +28,9 @@ jobs:
         run: npm run build --if-present
 
       - name: Create ZIP
-        run: zip -r deploy.zip ./webapp
+        run: |
+          cd webapp
+          zip -r ../deploy.zip .
 
       - name: Deploy via ZipDeploy
         run: |
