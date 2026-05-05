@@ -23,7 +23,6 @@ def my_orchestrator(context: df.DurableOrchestrationContext):
 @app.activity_trigger(input_name="order")
 def validate_activity(order: dict) -> dict:
     validate_url = os.environ["VALIDATE_URL"]
-    # VALIDATE_URL is already the full endpoint e.g. http://<IP>:8080/validate
     r = requests.post(validate_url, json=order)
     r.raise_for_status()
     return r.json()
@@ -42,6 +41,7 @@ def report_activity(order: dict) -> str:
     rg       = os.environ["REPORT_RG"]
     loc      = os.environ["REPORT_LOCATION"]
     image    = os.environ["REPORT_IMAGE"]
+    storage_url = os.environ["STORAGE_ACCOUNT_URL"]
     order_id = order["order_id"]
     name     = f"ci-report-{order_id.lower()}"
 
@@ -62,16 +62,15 @@ def report_activity(order: dict) -> str:
             resources=ResourceRequirements(
                 requests=ResourceRequests(cpu=1.0, memory_in_gb=1.5)),
             environment_variables=[
-                EnvironmentVariable(name="ORDER_ID",    value=order_id),
-                EnvironmentVariable(name="ORDER_JSON",  value=json.dumps(order)),
-                EnvironmentVariable(name="STORAGE_CONN", secure_value=os.environ["STORAGE_CONN"]),
+                EnvironmentVariable(name="ORDER_ID",          value=order_id),
+                EnvironmentVariable(name="ORDER_JSON",        value=json.dumps(order)),
+                EnvironmentVariable(name="STORAGE_ACCOUNT_URL", value=storage_url),
             ]
         )]
     )
 
     client.container_groups.begin_create_or_update(rg, name, group).result()
 
-    # Poll until Succeeded or Failed (max 5 minutes)
     for _ in range(60):
         info = client.container_groups.get(rg, name)
         state = info.instance_view.state if info.instance_view else None
@@ -79,9 +78,8 @@ def report_activity(order: dict) -> str:
             break
         time.sleep(5)
 
-    # Clean up ACI so it stops billing
     client.container_groups.begin_delete(rg, name)
 
-    # Return blob URL
-    account = os.environ["STORAGE_CONN"].split(";AccountName=")[1].split(";")[0]
+    # Extract account name from URL
+    account = storage_url.split("//")[1].split(".")[0]
     return f"https://{account}.blob.core.windows.net/reports/{order_id}.pdf"
