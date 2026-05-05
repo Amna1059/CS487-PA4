@@ -78,7 +78,7 @@ def report_activity(order: dict) -> str:
             break
         time.sleep(5)
 
-    client.container_groups.begin_delete(rg, name)
+    #client.container_groups.begin_delete(rg, name)
 
     # Extract account name from URL
     account = storage_url.split("//")[1].split(".")[0]
