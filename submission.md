@@ -284,7 +284,10 @@ Polling the Durable status URL for instance `24da19e73b9448c5ae91b1767d02c5a7` (
 
 ### Evidence 8.1: Architecture Diagram
 
-> **To be added** — Architecture diagram will be committed to `docs/` separately per the assignment instructions.
+![TaskFlow Architecture Diagram — rg-sp26-26100396, UK West](<docs/26100396_architecture.jpg>)
+
+The diagram illustrates the end-to-end **TaskFlow** pipeline deployed on **Azure UK West** under resource group `rg-sp26-26100396`. A user submits an order through the App Service web UI, which triggers a **Durable Function App** orchestrator that fans out to an AKS validator (`validate_activity`) and spins up an ephemeral ACI report job (`report_activity`). Container images are pulled from **ACR**, durable state is persisted in the **Storage Account**, generated PDFs are written to **Blob Storage**, and all resource access is brokered through a single Managed Identity (`mi-pa4-26100396`).
+
 
 ---
 
