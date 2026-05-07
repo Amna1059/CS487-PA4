@@ -35,9 +35,9 @@ Every screenshot is embedded under the correct task with a short description. Th
 
 ### Evidence 1.1: Forked Repository
 
-![Forked repository — git clone output](<docs/images_pa4/images/task1/Screenshot 2026-04-29 002515.png>)
+![Forked repository — git clone output](<docs/images_pa4/images/task1/Screenshot 2026-05-07 132918.png>)
 
-PowerShell shows `git clone https://github.com/Amna1059/CS487-PA4.git` completing successfully — 40 objects transferred (74.26 KiB). This confirms the repository was forked from the instructor's template and the student is working from their own fork containing the full PA4 starter structure.
+`Amna1059/CS487-PA4` is forked from `KarmaMS/CS487-PA4` as required by Task 1. All required directories — `function-app`, `report-job`, `validate-api`, `webapp`, and `docs` — are present on the `main` branch.
 
 ### Evidence 1.2: App Service Overview
 
@@ -56,6 +56,12 @@ The Deployment Center blade for `pa4-26100396` shows source **GitHub**, organisa
 ![TaskFlow running live in the browser](<docs/images_pa4/images/task1/Screenshot 2026-04-29 154231.png>)
 
 The browser address bar shows `pa4-26100396-dxa9d8b8g4c5aza0.ukwest-01.azurewebsites.net` and the TaskFlow order-submission form is rendered and responsive. The form accepts Order ID, SKU, and Quantity (Max 100), confirming the App Service is publicly serving the frontend.
+
+### Evidence 1.5: Application Settings
+
+![TaskFlow running live in the browser](<docs/images_pa4/images/task1/Screenshot 2026-04-29 154353.png>)
+
+The browser showing `FUNCTION_START_URL ` and `FUNCTION_STATUS_URL ` in the environment variables of the web app.
 
 ---
 
