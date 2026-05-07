@@ -293,56 +293,47 @@ The diagram illustrates the end-to-end **TaskFlow** pipeline deployed on **Azure
 
 ### Question 8.2: Service Selection
 
-**App Service** is the right host for the TaskFlow web frontend because it provides fully managed PaaS hosting with native GitHub Actions CI/CD, automatic TLS, custom domain support, and a predictable B1 plan cost of approximately $13/month — none of which requires any container orchestration knowledge to maintain. The frontend is a stateless Node.js server with negligible CPU/memory requirements, so the operational simplicity of App Service (no Dockerfile required for the CI/CD pipeline, no cluster to patch or upgrade) fits perfectly. Horizontal scale-out is available on demand via the portal or auto-scale rules, and the GitHub integration means every push to `main` triggers a build-and-deploy without any manual intervention or secrets management beyond the initial GitHub connection.
+**App Service** is the right host for the TaskFlow web frontend because it provides fully managed PaaS hosting with native GitHub Actions CI/CD, automatic TLS, and a predictable B1 plan cost of ~$13/month — none of which requires container orchestration knowledge to maintain. The frontend is a stateless Node.js server with negligible CPU/memory requirements, so the operational simplicity of App Service fits perfectly: no Dockerfile needed for CI/CD, no cluster to patch. Horizontal scale-out is available on demand, and every push to `main` triggers a build-and-deploy automatically.
 
-**Durable Functions** is the correct orchestration layer because the TaskFlow workflow is inherently sequential — the order must be validated before a report can be generated — and the report step can block for up to 60 seconds waiting for an ACI container to start, complete, and exit. Plain HTTP functions cannot sleep for a minute without consuming a thread or hitting the default 5-minute execution timeout. Durable Functions checkpoints the output of each activity to Azure Storage and suspends the orchestrator between `yield` points, so no thread is blocked and the full pipeline can span minutes without timeout risk. The Consumption/Dedicated billing model is also ideal: the orchestrator only consumes compute during the brief replay moments, not while waiting for ACI.
+**Durable Functions** is the correct orchestration layer because the TaskFlow workflow is inherently sequential — the order must be validated before a report can be generated — and the report step can block for up to 60 seconds waiting for an ACI container to start and exit. Plain HTTP functions cannot sleep for a minute without consuming a thread or hitting the 5-minute execution timeout. Durable Functions checkpoints each activity's output to Azure Storage and suspends the orchestrator between yield points, so no thread is blocked and the pipeline can span minutes without timeout risk.
 
-**AKS** is the right host for the validation microservice because it is a long-running, always-available HTTP API that must respond within milliseconds to every `validate_activity` call. A Kubernetes Deployment ensures the pod is always scheduled and `Running`, with Kubernetes handling restarts, health probes, and load distribution via the LoadBalancer Service. For a stateless FastAPI validator that receives frequent short-lived HTTP requests, a permanently resident pod on a persistent node is far cheaper per-request than spinning up a new ACI for each validation call. The validator also benefits from Kubernetes' rolling-update model: to release a new image version, a `kubectl set image` command triggers a zero-downtime rollout with automatic rollback on failure.
 
-**Azure Container Instances** is the right executor for the report job because generating a PDF is an ephemeral, run-to-completion workload that should not exist between orders. ACI's per-second billing means a container that runs for 20 seconds costs a fraction of a cent, while the same workload kept alive on an AKS node would accumulate VM costs around the clock. ACI accepts arbitrary Docker images, so the report job can pull in heavy PDF libraries (ReportLab) without burdening any long-lived host. The `report_activity` creates the container group via the Azure SDK, polls until `Succeeded`, then immediately deletes it — leaving zero persistent infrastructure and zero cost between order submissions.
+**AKS** is the right host for the validation microservice because it is a long-running, always-available HTTP API that must respond within milliseconds to every `validate_activity` call. A Kubernetes Deployment ensures the pod is always `Running`, with Kubernetes handling restarts, health probes, and load distribution via the `LoadBalancer` Service. A permanently resident pod is far cheaper per-request than spinning up a new ACI for each validation call, and the rolling-update model allows zero-downtime image upgrades via `kubectl set image`.
+
+
+**Azure Container Instances** is the right executor for the report job because generating a PDF is an ephemeral, run-to-completion workload that should not exist between orders. ACI's per-second billing means a 20-second container run costs a fraction of a cent, while the same workload kept alive on an AKS node accumulates VM costs around the clock. `report_activity` creates the container group via the Azure SDK, polls until `Succeeded`, then immediately deletes it — leaving zero persistent infrastructure and zero cost between submissions.
 
 ---
 
-### Question 8.3: ACI vs AKS — Hands-on Comparison
+### Question 8.3: ACI vs AKS
 
 **What happens to AKS when it is idle for 10 minutes?**
 
-Nothing changes. The node VM (`aks-nodepool1-14991093-vmss000000`) stays in **Ready** state and the validator pod remains **1/1 Running** regardless of whether any orders are submitted. As shown in Evidence 5.2, the node age grows continuously; it is never terminated, drained, or de-allocated by idle behaviour alone. Azure bills for the underlying VM every minute the node pool exists, even when CPU and memory usage are effectively zero. The only way to stop billing is to manually stop the cluster or delete the node pool — both of which take the validator offline.
+Nothing changes. The node VM stays in `Ready` state and the validator pod remains `1/1 Running` — AKS never terminates or de-allocates idle nodes. Azure bills for the underlying VM every minute the node pool exists regardless of traffic, and the only way to stop billing is to stop or delete the cluster, which takes the validator offline.
 
 **What does idle mean for ACI in the TaskFlow pipeline?**
 
-ACI containers do not exist between runs. After `report_activity` calls `begin_delete`, there is no container group in the resource group at all. As shown in Evidence 7.4, `az container list --resource-group rg-sp26-26100396 --output table` returns an empty table even immediately after a rejected order. Idle for ACI means literally zero cost, zero running processes, and zero allocated infrastructure. Every new report request boots a fresh container from the ACR image and terminates cleanly after writing the PDF.
+ACI containers do not exist between runs. After `report_activity` calls `begin_delete`, there is no container group in the resource group at all — idle means literally zero cost and zero allocated infrastructure. Every new report request boots a fresh container from ACR and terminates cleanly after writing the PDF.
 
 **If a malicious user spammed Submit 1,000 times in a minute, which service incurs the most cost, and why?**
 
-**ACI** would incur the most cost by a large margin. Each valid order causes `report_activity` to call `begin_create_or_update`, instantiating a new container group with 1 vCPU and 1.5 GB RAM. At Azure ACI pricing (~$0.0000025/vCPU-second and ~$0.0000003/GB-second), 1,000 simultaneous containers running for even 30 seconds each costs approximately $0.08–$0.12 for that single burst — and if no quota guard or rate limit is in place, the requests queue up and multiply the cost. By contrast, the AKS node absorbs all 1,000 validation POST requests on the same single pod; the node's hourly VM charge does not change regardless of traffic volume. The Durable Functions orchestrators also incur storage transaction costs (one checkpoint write per activity step), but these are negligible (sub-cent) compared to ACI compute. The correct mitigation is to place an Azure API Management rate-limit policy in front of the Durable HTTP starter endpoint.
+ACI would incur the most cost. Each valid order spawns a new container group (1 vCPU, 1.5 GB RAM), so 1,000 simultaneous containers running for ~30 seconds costs approximately $0.08–$0.12 in that single burst. The AKS node absorbs all 1,000 validation `POST` requests on the same pod with no change to its hourly VM charge. The correct mitigation is an **Azure API Management** rate-limit policy in front of the Durable HTTP starter endpoint.
 
 ---
 
 ### Question 8.4: Durable Functions vs Plain HTTP
 
-If the same validate → report flow were implemented as two plain HTTP-triggered functions that called each other, at least two concrete problems would make the implementation fragile and difficult to maintain.
+If the same `validate → report` flow were implemented as two plain HTTP-triggered functions calling each other, at least two concrete problems would make it fragile.
 
-**Function timeouts.** The `report_activity` must wait up to 60 seconds for the ACI container to reach `Succeeded` — implemented as a polling loop with `time.sleep(5)`. On a Consumption plan, the maximum execution timeout is 5 minutes (10 minutes on a dedicated plan), and the thread is blocked for the entire wait duration. If the calling "orchestrator" HTTP function were also waiting synchronously for the report function to return, it would itself block for the same 60 seconds, doubling the at-risk execution window. Any transient ACI slowness, cold start latency, or quota delay that pushes the total past the timeout would cause an unhandled 503 with no retry. Durable Functions eliminates this by suspending the orchestrator at each `yield` — the thread is released entirely while the activity runs, and resumption is driven by a storage queue message, not a blocked thread.
+**Function timeouts.** `report_activity` polls for ACI completion with `time.sleep(5)` for up to 60 seconds — blocking the thread the entire time. On a Consumption plan, any transient ACI slowness pushing the total past the 5-minute timeout causes an unhandled `503` with no retry. Durable Functions eliminates this by suspending the orchestrator at each `yield`, releasing the thread entirely until a storage queue message triggers resumption.
 
-**State persistence and retry-on-failure.** If a plain HTTP function crashes mid-execution — due to a transient network error, an Azure infrastructure blip, or a pod eviction — there is no built-in mechanism to resume from the last completed step. The caller receives a 500 and has no record of whether the validation step succeeded before the crash, so it cannot safely retry only the report step; retrying the entire call would re-validate and potentially re-create a duplicate ACI container group. Durable Functions checkpoints the serialised output of every completed activity to Azure Storage (queues + tables) before the orchestrator replays; on a crash and restart the orchestrator reads the persisted outputs and skips already-completed activities. Combined with `call_activity_with_retry`, the report step can be automatically retried up to N times with exponential back-off without re-running the validator — a guarantee that would require a custom database-backed state machine to reproduce with plain HTTP functions.
+**State persistence and retry-on-failure.** If a plain HTTP function crashes mid-execution, there is no mechanism to resume from the last completed step — the caller receives a `500` with no record of whether validation succeeded, so a full retry risks creating a duplicate ACI container group. Durable Functions checkpoints every completed activity's output to Azure Storage; on restart the orchestrator skips already-completed steps and can retry only the failed one with exponential back-off via `call_activity_with_retry`.
 
 ---
 
 ### Question 8.5: Cost Review
 
-> **Placeholder** — A Cost Management → Cost Analysis screenshot scoped to `rg-sp26-26100396` was not captured during the assignment. Based on the resources deployed and approximate durations:
->
-> | Resource | Estimated Duration | Estimated Cost |
-> |---|---|---|
-> | AKS cluster (1× Standard_B2s node) | ~72 hours | ~$5–8 |
-> | App Service (B1 plan) | ~72 hours | ~$1–2 |
-> | Azure Container Registry (Basic SKU) | ~7 days | ~$1.20 |
-> | Azure Container Instances (per-run, ~30s each) | <20 runs | <$0.01 |
-> | Storage Account (LRS, reports container) | ~7 days | ~$0.00 |
-> | Function App (Dedicated / Consumption) | ~72 hours | ~$1–2 |
->
-> **Most expensive resource:** The **AKS node pool** is by far the largest cost driver. The underlying B-series VM bills continuously at its hourly rate for the full duration the cluster exists, regardless of whether any validation requests arrive. All other resources (App Service, ACR, storage, ACI) are either cheaper per-hour or only bill during actual usage.
+![Cost Management — Cost Analysis for rg-sp26-26100396, May 2026](<docs/images_pa4/images/cost_analysis.png>)
 
 ---
 
