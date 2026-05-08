@@ -250,9 +250,7 @@ Immediately after submission the UI shows a **Running** badge alongside the orch
 
 The status badge transitions to **Completed** and a **View PDF Report** button appears. The full pipeline executed: the AKS validator approved the order, the Durable Function created an ACI report container, the PDF was written to Blob Storage, and the report URL was returned to the frontend.
 
-![Happy path — PDF blob URL accessed](<docs/images_pa4/images/task7/4_happy/Screenshot 2026-05-05 160616.png>)
-
-Clicking the report link navigates to `pa426100396.blob.core.windows.net/reports/ORD-001.pdf`. The `PublicAccessNotPermitted` XML error confirms the blob was written (the URL and container are real) but anonymous public access is disabled on the storage account — this is the correct, secure configuration. The file can be accessed via SAS token or authenticated SDK calls.
+![Happy path — PDF blob URL accessed](<docs/images_pa4/images/task7/4_happy/Screenshot 2026-05-08 063958.png>)
 
 ### Evidence 7.3: Backend Participation
 
