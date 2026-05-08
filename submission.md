@@ -69,7 +69,9 @@ The browser showing `FUNCTION_START_URL ` and `FUNCTION_STATUS_URL ` in the envi
 
 ### Evidence 2.1: ACR Overview
 
-> **Placeholder** — A portal screenshot of the `acrpa426100396` overview page was not captured during the assignment. The CLI evidence in 2.3 (`az acr repository list --name acrpa426100396`) and the ACR build output in 2.2 confirm the registry exists in `rg-sp26-26100396` with login server `acrpa426100396.azurecr.io`. Please add a portal screenshot here if required by the grader.
+![ACR Overview](<docs/images_pa4/images/task2/Screenshot 2026-05-08 040609.png>)
+
+Image shows the successful creation of ACR.
 
 ### Evidence 2.2: Docker Builds
 
@@ -178,7 +180,7 @@ The Function App application setting `VALIDATE_URL` is set to `http://51.104.39.
 
 ### Evidence 5.6: AKS Idle Behavior
 
-> **Placeholder** — An AKS Metrics screenshot (CPU/memory during an idle period) was not captured. By design, node `aks-nodepool1-14991093-vmss000000` remains in **Ready** state and the validator pod stays **Running** regardless of order volume. The VM is always allocated and billing accumulates at the B-series hourly rate even when no traffic arrives — a fundamental contrast with ACI's per-second billing described in Task 8.3.
+![AKS Idle Behavior](<docs/images_pa4/images/task5/Screenshot 2026-05-08 042325.png>)
 
 ---
 
@@ -283,6 +285,10 @@ Polling the Durable status URL for instance `24da19e73b9448c5ae91b1767d02c5a7` (
 ![Reject path — az container list empty, no ACI created](<docs/images_pa4/images/task7/7.3_rejection/Screenshot 2026-05-05 154637.png>)
 
 `az container list --resource-group rg-sp26-26100396 --output table` run twice both return an empty table. No `ci-report-*` container group was created for the rejected order, proving the pipeline correctly skips the expensive ACI report step when validation fails.
+
+### Evidence 7.5: All Resource Groups
+
+![All resource groups](<docs/images_pa4/images/task7/7.3_rejection/Screenshot 2026-05-08 050053.png>)
 
 ---
 
